@@ -1,0 +1,19 @@
+#!/bin/sh
+source /home/home/kanj/aCLFS/build.config
+source ~/.bashrc
+pushd /home/home/kanj/aCLFS
+cd $HOME 
+export CLFS_HOST=$(echo ${MACHTYPE} | sed "s/-[^-]*/-cross/")
+
+export CLFS_ARCH=arm
+
+echo export CLFS_HOST=\""${CLFS_HOST}\"" >> ~/.bashrc
+echo export CLFS_TARGET=\""${CLFS_TARGET}\"" >> ~/.bashrc
+echo export CLFS_ARCH=\""${CLFS_ARCH}\"" >> ~/.bashrc
+echo export CLFS_ENDIAN=\""${CLFS_ENDIAN}\"" >> ~/.bashrc
+echo export CLFS_ARM_ARCH=\""${CLFS_ARM_ARCH}\"" >> ~/.bashrc
+echo export CLFS_ARM_MODE=\""${CLFS_ARM_MODE}\"" >> ~/.bashrc
+echo export CLFS_FLOAT=\""${CLFS_FLOAT}\"" >> ~/.bashrc
+echo export CLFS_FPU=\""${CLFS_FPU}\"" >> ~/.bashrc
+ [ $? = 0 ] && touch ${CLFS}/sources/clfs/cross-tools/variables.html
+popd 

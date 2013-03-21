@@ -1,0 +1,16 @@
+#For use with Versatilepb
+baseURL=http://cross-lfs.org/view/clfs-embedded/
+baseDir=$PWD/localBOOK
+basePatch=$PWD/patchDir/arm
+CLFS=/opt/aCLFS.ARM.little
+CLFS_ARCH=arm
+CLFS_ABI=aapcs-linux
+CLFS_HOST=$(echo ${MACHTYPE} | sed "s/-[^-]*/-cross/")
+CLFS_TARGET=armv5l-unknown-linux-uclibceabi
+CLFS_ARM_ARCH=armv5te
+CLFS_ARM_MODE=arm
+CLFS_FLOAT=soft
+CLFS_FPU=none
+CLFS_ENDIAN=little
+kConfig=$PWD/configs/kernel/kernel.arm.little
+APPEND='-M versatileab -m 256 -serial stdio  -append "console=tty1"'

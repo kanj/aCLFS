@@ -1,0 +1,232 @@
+#!/bin/sh
+set -e
+# Convert CLFS into a script
+# Based on  CLFS GIT-0.0.1-20120922 
+# 2013-02-07 Significant overhaul to reflect the git organization rather than the rendered 
+# Goal is error free build for Malta, PC, and Versatilepb
+# Also this versio will use the current sources and introduce patches 
+# 2013-03-13 Significant overhaul to use webscraping techniques
+
+
+# Default base is the package - use this for BLFS
+#TODO when creating links use -f to avoid errors if process repeated - this is for the book
+#TODO make getting patches explicitly part of the user steps
+#TODO Make initramfs as part of the final system
+#TODO Add -j option to make statements
+
+doPrep () {
+
+source $PWD/aCLFS.config
+
+source $PWD/build.config
+
+case ${CLFS_ARCH} in
+mips)   BOOK_ARCH=mips;;
+arm)    BOOK_ARCH=arm;;
+*)      BOOK_ARCH=x86;;
+esac
+
+[ -d gitBOOK/$gitBOOK ] || git clone $REPO gitBOOK/$gitBOOK
+
+cd gitBOOK/$gitBOOK
+git pull
+cd -
+
+[ -d gitBOOK/$gitBOOK/render/html/${BOOK_ARCH} ] || renderBook
+
+
+}
+
+renderBook () {
+
+pushd $PWD
+
+cd gitBOOK/$gitBOOK/BOOK
+
+make
+
+popd
+
+}
+
+
+doDownload () {
+
+ 
+
+      pkg=${pkgUrl##*/}
+
+      echo "pkg is " $pkg
+
+      [ -f $SRC_ARCHIVE/$pkg ] || wget -P $SRC_ARCHIVE  $pkgUrl
+
+ 
+
+      tarType=${pkgUrl##*.}
+
+      pkgFolder=${pkg%%.tar*}
+
+      buildFolder=$( echo -n $pkgFolder | cut -d- -f1 )"-build"
+
+      case $tarType in
+
+            bz2) tar -xjf $SRC_ARCHIVE/$pkg -C ${CLFS}/sources/  ;;
+
+            tar) tar -xvf $SRC_ARCHIVE/$pkg -C ${CLFS}/sources/  ;;
+
+            gz)   tar -xzf $SRC_ARCHIVE/$pkg -C ${CLFS}/sources/  ;;
+
+            *)    echo "Unrecognized archive format " && exit 1   ;;
+
+      esac
+
+      chown -Rv clfs ${CLFS}/sources/$pkgFolder
+
+
+}
+
+
+makeScript () {
+echo $scriptDir
+echo "#!/bin/sh" > shellScript
+echo "source $PWD/build.config" >> shellScript
+echo 'source ~/.bashrc' >> shellScript
+echo "pushd $PWD" >> shellScript
+echo "cd $base " >> shellScript
+
+cat $scriptDir/$rootPage | hxselect kbd -c -s '\n' >> shellScript  # scrape commands from page
+echo ' [ $? = 0 ] && touch ${CLFS}/sources/clfs/'$rootPage >> shellScript
+echo "popd " >> shellScript
+
+# The following helps to clean up some html oddities
+
+sed -i s#/mnt/clfs#${CLFS}#g shellScript
+sed -i 's/<[^>]\+>/ /g' shellScript
+sed -i s#"&lt;"#"<"#g shellScript
+sed -i s#"&gt;"#">"#g shellScript
+
+chmod 777 shellScript
+
+}
+
+doCleanUp () {
+
+    rm -r ${CLFS}/sources/$pkgFolder
+
+    for aPatch in `ls ${CLFS}/sources/*patch`
+    do
+        rm $aPatch
+    done
+
+    for aBuildDir in `ls ${CLFS}/sources/ | grep -e "-build" `
+    do
+        rm -r  ${CLFS}/sources/$aBuildDir
+    done        
+    
+
+
+}
+
+
+runSystem () {
+
+makeInitRamFS
+
+case ${CLFS_ARCH} in
+arm)    \
+    qemu-system-arm -kernel ${CLFS}/boot/clfskernel-2.6.38.2 \
+    -initrd ${CLFS}/build/initramfs -M versatileab -m 128 -serial stdio -append "console=tty1"    \
+    ;;
+mips)   
+    case ${CLFS_ENDIAN} in
+        little) qemu-system-mipsel -M mipssim  -m 128M -kernel ${CLFS}/boot/clfskernel-2.6.38.2   -initrd ${CLFS}/build/initramfs -append "root=/dev/ram console=ttyS0" -nographic;;
+        big)    qemu-system-mips -m 128M -kernel ${CLFS}/boot/clfskernel-$kernel_ver -initrd ${CLFS}/build/initramfs -append "console=ttyS0" -nographic ;;
+    esac
+    ;;
+i386)   qemu-system-i386 -kernel ${CLFS}/boot/clfskernel-2.6.38.2 \
+    -initrd ${CLFS}/build/initramfs  -m 512 -serial stdio -append "console=tty1"    \
+    ;;
+x86_64)  qemu-system-x86_64 -kernel ${CLFS}/boot/clfskernel-2.6.38.2 \
+    -initrd ${CLFS}/build/initramfs  -m 1024 -serial stdio -append "console=tty1"    \
+    ;;
+*)  echo "Unsupported architecture"
+esac
+
+
+ 
+}
+
+
+makeInitRamFS () {
+
+
+
+[ -f ${CLFS}/build/initramfs ] && rm ${CLFS}/build/initramfs
+
+src=${CLFS}-final
+
+# This link is necesary for the initramfs
+cp ${CLFS}-final/sbin/init ${CLFS}-final
+
+(cd "$src"; find . | cpio -o --format=newc | gzip ) > ${CLFS}/build/initramfs
+rm ${CLFS}-final/init
+
+
+
+}
+
+
+
+
+
+
+
+
+doPrep
+
+#OOM=Order of March. This file contains page url, which user executes, what directory to start from, and 
+# the url for the source package to download
+#Variations of while read pageEntry do not work. uClibc requires manual entry. These entries finish
+# reading the file 
+
+for  pageEntry in $( cat localBOOK/$localBOOK/OOM )
+do
+    
+    
+    rootPage=$( echo -n $pageEntry | cut -d'#' -f1 )
+
+    user=$( echo -n $pageEntry | cut -d'#' -f2 )
+
+    base=$( echo -n $pageEntry | cut -d'#' -f3 )
+    
+    pkgUrl=$( echo -n $pageEntry | cut -d'#' -f4 )
+    
+    echo "User " $user " is executing " $rootPage " from "$base
+    
+    [ -f ${CLFS}/sources/clfs/$rootPage ] && continue
+    
+    [ -z $pkgUrl ] || doDownload
+    
+    
+   #Select which directory to pull page from.
+   scriptDir=gitBOOK/$gitBOOK/render/html/${BOOK_ARCH}/
+            
+   [  -e localBOOK/$localBOOK/${BOOK_ARCH}/$rootPage ] && scriptDir=localBOOK/$localBOOK/${BOOK_ARCH}/
+                       
+   makeScript
+   su -c $PWD/shellScript -s /bin/bash ${user}
+        
+    
+    
+    [ -f ${CLFS}/sources/clfs/$rootPage ] || break
+    
+    [ -z $pkgUrl ] || doCleanUp
+    
+      
+done 
+
+echo "Congratulations system build complete "
+
+
+
+runSystem

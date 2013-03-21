@@ -1,0 +1,75 @@
+aCLFS  (Automated Cross Linux from Scratch)
+
+This is an alternate to JHALFS for automation of the CLFS books. Currently JHALFS offers limited support 
+outside of the main LFS book. 
+
+This is the structure for aCLFS
+
+INSTALLDIR\ 
+	aCLFS			# This is the main script
+	aclfs.config	# this is a link to a configuration		
+	build.config	# this is a link to a configuration
+	localBOOK/
+			aBOOK/
+				OOM
+				final-preps/ 
+				...
+				index	# would like to create an index based on modded book as part of doPrep
+				#could add a test page to the local book - rather than have it part of aCLFS
+	configs/
+			aCLFS/
+			build/
+			kernel/	#helps support automated testing
+	gitBOOK/	
+			clfs-embedded/	#where user can clone a repository
+
+
+	Special Files:
+
+	aCLFS.config	# specify the following variables. 
+		SRC_ARCHIVE=/usr/src
+		gitRepository
+		BOOK #This is where git will be cloned
+		localBook
+
+	build.Config	#Required variables depend on architecture 
+		${CLFS}
+		${CLFS_ARCH}
+		...	
+	OOM	
+
+	Consists of line entries of the form:
+		pageUrl#user#base#pkgUrl
+
+
+What aCLFS does:
+
+	It preps by cloning/ updating a repository to a local directory
+
+	(WIP) It createx index.html based on the git repository and local Book
+
+	(WIP) It creates an OOM file when doing BLFS.
+
+	It reads the OOM file from the local copy of the book.
+
+	for each line in the OOM file:
+
+		download the required source package
+
+		copy to the ${CLFS}/sources directory
+	
+		change owner
+
+		make script based on web page
+
+		execute script as ${user}
+
+		remove source from ${CLFS}/sources
+
+		
+	
+To run:
+
+Set up aclfs.config and build.config to meet your needs.
+
+sudo ./aCLFS
