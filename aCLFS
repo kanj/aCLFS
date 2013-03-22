@@ -90,7 +90,7 @@ makeScript () {
 echo $scriptDir
 echo "#!/bin/sh" > shellScript
 echo "source $PWD/build.config" >> shellScript
-echo '[ -f ~/.bashrc ] && source ~/.bashrc' >> shellScript
+echo '[ -f ~/.bashrc ] && source ~/.bashrc' >> shellScriptcat /home/clfs/
 echo "pushd $PWD" >> shellScript
 echo "cd $base " >> shellScript
 
@@ -131,7 +131,7 @@ doCleanUp () {
 runSystem () {
 
 makeInitRamFS
-
+echo ${CLFS_ENDIAN}
 case ${CLFS_ARCH} in
 arm)    \
     qemu-system-arm -kernel ${CLFS}/boot/clfskernel-2.6.38.2 \
@@ -139,7 +139,10 @@ arm)    \
     ;;
 mips)   
     case ${CLFS_ENDIAN} in
-        little) qemu-system-mipsel -M mipssim  -m 128M -kernel ${CLFS}/boot/clfskernel-2.6.38.2   -initrd ${CLFS}/build/initramfs -append "root=/dev/ram console=ttyS0" -nographic;;
+        little) 
+        echo "Little"
+        read a
+        qemu-system-mipsel -M mipssim  -m 128M -kernel ${CLFS}/boot/clfskernel-2.6.38.2   -initrd ${CLFS}/build/initramfs -append "root=/dev/ram console=ttyS0" -nographic;;
         big)    qemu-system-mips -m 128M -kernel ${CLFS}/boot/clfskernel-$kernel_ver -initrd ${CLFS}/build/initramfs -append "console=ttyS0" -nographic ;;
     esac
     ;;
