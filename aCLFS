@@ -33,7 +33,7 @@ git pull
 cd -
 
 [ -d gitBOOK/$gitBOOK/render/html/${BOOK_ARCH} ] || renderBook
-
+[ -d /home/clfs ] && ( [ -f ${CLFS}/sources/final-preps/settingenvironment.html ]  || rm -f /home/clfs/.bashrc )
 
 }
 
@@ -90,7 +90,7 @@ makeScript () {
 echo $scriptDir
 echo "#!/bin/sh" > shellScript
 echo "source $PWD/build.config" >> shellScript
-echo 'source ~/.bashrc' >> shellScript
+echo '[ -f ~/.bashrc ] && source ~/.bashrc' >> shellScript
 echo "pushd $PWD" >> shellScript
 echo "cd $base " >> shellScript
 
