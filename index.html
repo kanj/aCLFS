@@ -1,0 +1,59 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+    
+    <title>ALFS Project Homepage</title>
+    <link rel="stylesheet" type="text/css" href="./ALFS Project Homepage_files/main.css">
+  </head>
+  <body>
+    
+
+   
+   
+
+    <div class="navbar">
+      <ul id="menu">
+       
+        <li><a id="clfs" href="http://cross-lfs.org/">CLFS</a></li>
+      
+      </ul>
+    </div>
+
+    
+
+    <div class="main">
+     <h1>What is Automated Cross Linux From Scratch?</h1>
+     <p>Automated Cross Linux From Scratch (aCLFS) is a project that creates the
+	generic framework for automated testing of xLFS books. note: It is not an official project of either LFS or CLFS. The link to CLFS is for user convenience.
+     </p>
+
+     <h2>Why would I want to use aCLFS?</h2>
+     <p>aCLFS was created to support automated testing for xLFS. An ongoing concern is development resources and a set of automated test cases would leverage development resources.</p>
+
+     <h2>What can I do with aCLFS?</h2>
+
+     <p>The goal of aCLFS is to <em>automate</em> the process of creating an xLFS system.
+	It seeks to make the process of building xLFS easier and more efficient.
+	
+     </p>
+
+     <h2>Why create another LFS automation?</h2>
+
+     <p>It appears the xLFS projects with the best level of automation are the furthest along. 
+     </p>
+
+
+     <h2>How is aCLFS implemented?</h2>
+     <p>Unlike other implementations for automating this process, the rendered book is used. Currently the appropriate git repository is cloned/updated. At a minimum a local copy of the book containing a file that specified page order, user, directroy to execute in and location of package. If the local BOOK contains a modified copy of the page it will be given preference. The aCLFS script downloads the specified package and copies it to $CLFS}, pulls the commands from the specified page of the BOOK, executes as the user from the specified directory.</p>
+     
+
+    
+
+       <br>
+     
+     </div>
+    
+  
+
+
+</body></html>
