@@ -1,18 +1,14 @@
 #!/bin/sh
 set -e
-# Convert CLFS into a script
-# Based on  CLFS GIT-0.0.1-20120922 
-# 2013-02-07 Significant overhaul to reflect the git organization rather than the rendered 
-# Goal is error free build for Malta, PC, and Versatilepb
-# Also this versio will use the current sources and introduce patches 
-# 2013-03-13 Significant overhaul to use webscraping techniques
+# Version   2013-03-25
+#   Outputs are saved to log files in ${CLFS}/sources/clfs
+#   Key stats are save to log file - start/stop times, disk usage at key points
+#   OOM moved to arch specific folder
+#   Patch download integrated into package download
+#   Progress indicator reformatted
+#   Some commands "silenced", e.g. cd -.
 
-
-# Default base is the package - use this for BLFS
-#TODO when creating links use -f to avoid errors if process repeated - this is for the book
-#TODO make getting patches explicitly part of the user steps
-#TODO Make initramfs as part of the final system
-#TODO Add -j option to make statements
+aFormat="%-5s %-12s %-37s %-6s %-38s %-10s %-8s \n"
 
 doPrep () {
 
@@ -30,22 +26,24 @@ esac
 
 cd gitBOOK/$gitBOOK
 git pull
-cd -
+cd - > /dev/null
 
 [ -d gitBOOK/$gitBOOK/render/html/${BOOK_ARCH} ] || renderBook
-[ -d /home/clfs ] && ( [ -f ${CLFS}/sources/final-preps/settingenvironment.html ]  || rm -f /home/clfs/.bashrc )
+
+
+[ -d /home/clfs ] && ( [ -f ${CLFS}/sources/clfs/final-preps/settingenvironment.html ]  || rm -f /home/clfs/.bashrc )
 
 }
 
 renderBook () {
 
-pushd $PWD
+echo "im rendering"
 
 cd gitBOOK/$gitBOOK/BOOK
 
 make
 
-popd
+cd -  > /dev/null
 
 }
 
@@ -56,7 +54,7 @@ doDownload () {
 
       pkg=${pkgUrl##*/}
 
-      echo "pkg is " $pkg
+      echo "Preparing "$base
 
       [ -f $SRC_ARCHIVE/$pkg ] || wget -P $SRC_ARCHIVE  $pkgUrl
 
@@ -75,22 +73,26 @@ doDownload () {
             tar) tar -xvf $SRC_ARCHIVE/$pkg -C ${CLFS}/sources/  ;;
 
             gz)   tar -xzf $SRC_ARCHIVE/$pkg -C ${CLFS}/sources/  ;;
+            
+            xz) tar -Jxf $SRC_ARCHIVE/$pkg -C ${CLFS}/sources/  ;;
 
             *)    echo "Unrecognized archive format " && exit 1   ;;
 
       esac
-
-      chown -Rv clfs ${CLFS}/sources/$pkgFolder
-
+   
+   base=$( echo -n $base | sed s#'${CLFS}'#${CLFS}#g )
+   chown -R clfs ${base}
+   [ -z $patchUrl ] || wget -P ${CLFS}/sources $patchUrl > /dev/null 2>log
+   [ -z $patchUrl ] || chown -R clfs  ${CLFS}/sources/*.patch 
 
 }
 
 
 makeScript () {
-echo $scriptDir
+
 echo "#!/bin/sh" > shellScript
 echo "source $PWD/build.config" >> shellScript
-echo '[ -f ~/.bashrc ] && source ~/.bashrc' >> shellScriptcat /home/clfs/
+echo '[ -f ~/.bashrc ] && source ~/.bashrc' >> shellScript
 echo "pushd $PWD" >> shellScript
 echo "cd $base " >> shellScript
 
@@ -111,11 +113,11 @@ chmod 777 shellScript
 
 doCleanUp () {
 
-    rm -r ${CLFS}/sources/$pkgFolder
+    rm -r ${base}
 
-    for aPatch in `ls ${CLFS}/sources/*patch`
+    for aPatch in `ls ${CLFS}/sources/ | grep -e "patch" `
     do
-        rm $aPatch
+        rm ${CLFS}/sources/$aPatch
     done
 
     for aBuildDir in `ls ${CLFS}/sources/ | grep -e "-build" `
@@ -128,62 +130,6 @@ doCleanUp () {
 }
 
 
-runSystem () {
-
-makeInitRamFS
-echo ${CLFS_ENDIAN}
-case ${CLFS_ARCH} in
-arm)    \
-    qemu-system-arm -kernel ${CLFS}/boot/clfskernel-2.6.38.2 \
-    -initrd ${CLFS}/build/initramfs -M versatileab -m 128 -serial stdio -append "console=tty1"    \
-    ;;
-mips)   
-    case ${CLFS_ENDIAN} in
-        little) 
-        echo "Little"
-        read a
-        qemu-system-mipsel -M mipssim  -m 128M -kernel ${CLFS}/boot/clfskernel-2.6.38.2   -initrd ${CLFS}/build/initramfs -append "root=/dev/ram console=ttyS0" -nographic;;
-        big)    qemu-system-mips -m 128M -kernel ${CLFS}/boot/clfskernel-$kernel_ver -initrd ${CLFS}/build/initramfs -append "console=ttyS0" -nographic ;;
-    esac
-    ;;
-i386)   qemu-system-i386 -kernel ${CLFS}/boot/clfskernel-2.6.38.2 \
-    -initrd ${CLFS}/build/initramfs  -m 512 -serial stdio -append "console=tty1"    \
-    ;;
-x86_64)  qemu-system-x86_64 -kernel ${CLFS}/boot/clfskernel-2.6.38.2 \
-    -initrd ${CLFS}/build/initramfs  -m 1024 -serial stdio -append "console=tty1"    \
-    ;;
-*)  echo "Unsupported architecture"
-esac
-
-
- 
-}
-
-
-makeInitRamFS () {
-
-
-
-[ -f ${CLFS}/build/initramfs ] && rm ${CLFS}/build/initramfs
-
-src=${CLFS}-final
-
-# This link is necesary for the initramfs
-cp ${CLFS}-final/sbin/init ${CLFS}-final
-
-(cd "$src"; find . | cpio -o --format=newc | gzip ) > ${CLFS}/build/initramfs
-rm ${CLFS}-final/init
-
-
-
-}
-
-
-
-
-
-
-
 
 doPrep
 
@@ -192,7 +138,7 @@ doPrep
 #Variations of while read pageEntry do not work. uClibc requires manual entry. These entries finish
 # reading the file 
 
-for  pageEntry in $( cat localBOOK/$localBOOK/OOM )
+for  pageEntry in $( cat localBOOK/$localBOOK/${BOOK_ARCH}/OOM )
 do
     
     
@@ -204,32 +150,50 @@ do
     
     pkgUrl=$( echo -n $pageEntry | cut -d'#' -f4 )
     
-    echo "User " $user " is executing " $rootPage " from "$base
+    patchUrl=$( echo -n $pageEntry | cut -d'#' -f5 )
+    
+    log=$( echo -n $rootPage | sed s#html#log#g )   
+    
     
     [ -f ${CLFS}/sources/clfs/$rootPage ] && continue
     
+    initDU=$( du -ks ${CLFS} | cut -f1 )
+    
+    echo "initDU="$initDU > log
+    
     [ -z $pkgUrl ] || doDownload
     
+    echo "initTime="`date +%s` >> log
     
    #Select which directory to pull page from.
    scriptDir=gitBOOK/$gitBOOK/render/html/${BOOK_ARCH}/
-            
+   myBOOK=git         
    [  -e localBOOK/$localBOOK/${BOOK_ARCH}/$rootPage ] && scriptDir=localBOOK/$localBOOK/${BOOK_ARCH}/
-                       
+   [  -e localBOOK/$localBOOK/${BOOK_ARCH}/$rootPage ] && myBOOK=local                  
    makeScript
-   su -c $PWD/shellScript -s /bin/bash ${user}
+   
+   
+   
+   
+   printf "$aFormat" $user "is executing" $rootPage "from" $base "using" $myBOOK 
+   su -c $PWD/shellScript -s /bin/bash ${user} >> log 2>&1
         
+   
     
-    
-    [ -f ${CLFS}/sources/clfs/$rootPage ] || break
+    maxDU=$( du -ks ${CLFS} | cut -f1 )  
+    echo "maxDU="$maxDU >> log
+    echo "finalTime="`date +%s` >> log
     
     [ -z $pkgUrl ] || doCleanUp
     
+    
+    finalDU=$( du -ks ${CLFS} | cut -f1 )  
+    echo "maxDU="$finalDU >> log
+    mv log  ${CLFS}/sources/clfs/$log
+    [ -f ${CLFS}/sources/clfs/$rootPage ] || break
       
 done 
 
-echo "Congratulations system build complete "
+( [ -e ${CLFS}/sources/clfs/$rootPage ] && echo "Congratulations system build complete " ) || echo "Abnormal Termination"
 
 
-
-runSystem
