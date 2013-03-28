@@ -1,5 +1,13 @@
 #!/bin/sh
 set -e
+# Version 2013-03-26
+#   Update redirect for patch download from > to >>
+#   Moved BOOK_ARCH to build.config
+#   Updated initDU to address case when ${CLFS} not yet created.
+#   Added makeReport
+#   Removed final shellScript
+#   Update BOOK_ARCH to PLATFORM and gitBOOK to BOOK to be consistent with JHALFS
+
 # Version   2013-03-25
 #   Outputs are saved to log files in ${CLFS}/sources/clfs
 #   Key stats are save to log file - start/stop times, disk usage at key points
@@ -16,19 +24,13 @@ source $PWD/aCLFS.config
 
 source $PWD/build.config
 
-case ${CLFS_ARCH} in
-mips)   BOOK_ARCH=mips;;
-arm)    BOOK_ARCH=arm;;
-*)      BOOK_ARCH=x86;;
-esac
+[ -d gitBOOK/$BOOK ] || git clone $REPO gitBOOK/$BOOK
 
-[ -d gitBOOK/$gitBOOK ] || git clone $REPO gitBOOK/$gitBOOK
-
-cd gitBOOK/$gitBOOK
+cd gitBOOK/$BOOK
 git pull
 cd - > /dev/null
 
-[ -d gitBOOK/$gitBOOK/render/html/${BOOK_ARCH} ] || renderBook
+[ -d gitBOOK/$BOOK/render/html/${PLATFORM} ] || renderBook
 
 
 [ -d /home/clfs ] && ( [ -f ${CLFS}/sources/clfs/final-preps/settingenvironment.html ]  || rm -f /home/clfs/.bashrc )
@@ -39,7 +41,7 @@ renderBook () {
 
 echo "im rendering"
 
-cd gitBOOK/$gitBOOK/BOOK
+cd gitBOOK/$BOOK/BOOK
 
 make
 
@@ -82,7 +84,7 @@ doDownload () {
    
    base=$( echo -n $base | sed s#'${CLFS}'#${CLFS}#g )
    chown -R clfs ${base}
-   [ -z $patchUrl ] || wget -P ${CLFS}/sources $patchUrl > /dev/null 2>log
+   [ -z $patchUrl ] || wget -P ${CLFS}/sources $patchUrl > /dev/null 2>>log
    [ -z $patchUrl ] || chown -R clfs  ${CLFS}/sources/*.patch 
 
 }
@@ -129,7 +131,60 @@ doCleanUp () {
 
 }
 
+makeReport () {
 
+rm shellScript
+
+SBU=$(( $( grep -e "finalTime" ${CLFS}/sources/clfs/cross-tools/binutils.log | cut -d= -f2 ) - \
+        $( grep -e "initTime" ${CLFS}/sources/clfs/cross-tools/binutils.log | cut -d= -f2 ) ))
+
+
+
+echo "The contents of the aCLFS.config file was "
+cat aCLFS.config
+
+echo "The contents of the build.config file was:"
+cat build.config
+
+printf "%30s %5s %5s %5s %5s %5s  \n" "Page"  "Initial DU (kb)" "Build DU (kb)" "Final DU (kb)" "elapsedTime (s)"  "elaspsed Time (SBU)"
+
+aFormat="%-35s  %9d %9d %9d %9d %3d \n"
+
+for  pageEntry in $( cat localBOOK/$BOOK/${PLATFORM}/OOM )
+do
+    
+    
+    rootPage=$( echo -n $pageEntry | cut -d'#' -f1 )
+
+    
+    log=$( echo -n $rootPage | sed s#html#log#g )   
+    
+    initDU=$( grep -e "initDU" ${CLFS}/sources/clfs/$log | cut -d= -f2 )
+    
+    initTime=$( grep -e "initTime" ${CLFS}/sources/clfs/$log | cut -d= -f2 )
+    
+    maxDU=$( grep -e "maxDU" ${CLFS}/sources/clfs/$log | cut -d= -f2 )
+    
+      
+    buildDU=$(( maxDU - initDU))
+    
+    finalDU=$( grep -e "finalDU" ${CLFS}/sources/clfs/$log | cut -d= -f2 )
+    
+    finalTime=$( grep -e "finalTime" ${CLFS}/sources/clfs/$log | cut -d= -f2 )
+    
+    elapsedTime=$(( $finalTime - $initTime ))
+    
+    buildSBU=$(( $elapsedTime / $SBU ))
+    
+    printf "$aFormat"  $rootPage $initDU $buildDU $finalDU $elapsedTime $buildSBU 
+      
+done 
+
+mv summary ${CLFS}/sources/clfs
+
+
+
+}
 
 doPrep
 
@@ -138,7 +193,8 @@ doPrep
 #Variations of while read pageEntry do not work. uClibc requires manual entry. These entries finish
 # reading the file 
 
-for  pageEntry in $( cat localBOOK/$localBOOK/${BOOK_ARCH}/OOM )
+
+for  pageEntry in $( cat localBOOK/$BOOK/${PLATFORM}/OOM )
 do
     
     
@@ -157,7 +213,9 @@ do
     
     [ -f ${CLFS}/sources/clfs/$rootPage ] && continue
     
-    initDU=$( du -ks ${CLFS} | cut -f1 )
+    initDU=$( du -ks ${CLFS} 2>/dev/null | cut -f1 ) 
+    
+    [ "$initDU" = "" ] && initDU=0
     
     echo "initDU="$initDU > log
     
@@ -166,10 +224,10 @@ do
     echo "initTime="`date +%s` >> log
     
    #Select which directory to pull page from.
-   scriptDir=gitBOOK/$gitBOOK/render/html/${BOOK_ARCH}/
+   scriptDir=gitBOOK/$BOOK/render/html/${PLATFORM}/
    myBOOK=git         
-   [  -e localBOOK/$localBOOK/${BOOK_ARCH}/$rootPage ] && scriptDir=localBOOK/$localBOOK/${BOOK_ARCH}/
-   [  -e localBOOK/$localBOOK/${BOOK_ARCH}/$rootPage ] && myBOOK=local                  
+   [  -e localBOOK/$BOOK/${PLATFORM}/$rootPage ] && scriptDir=localBOOK/$BOOK/${PLATFORM}/
+   [  -e localBOOK/$BOOK/${PLATFORM}/$rootPage ] && myBOOK=local                  
    makeScript
    
    
@@ -188,7 +246,7 @@ do
     
     
     finalDU=$( du -ks ${CLFS} | cut -f1 )  
-    echo "maxDU="$finalDU >> log
+    echo "finalDU="$finalDU >> log
     mv log  ${CLFS}/sources/clfs/$log
     [ -f ${CLFS}/sources/clfs/$rootPage ] || break
       
@@ -196,4 +254,4 @@ done
 
 ( [ -e ${CLFS}/sources/clfs/$rootPage ] && echo "Congratulations system build complete " ) || echo "Abnormal Termination"
 
-
+makeReport > summary
