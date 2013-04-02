@@ -108,7 +108,7 @@ if [ "${CLFS_ABI}" == "aapcs" ] || [ "${CLFS_ABI}" == "aapcs-linux" ]; \
           specify in our generic config file patch:
         </p>
         <pre class="userinput">
-<kbd class="command">make oldconfig</kbd>
+<kbd class="command">yes "" | make oldconfig</kbd>
 </pre>
         <p>
           Compile the package:

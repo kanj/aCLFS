@@ -1,5 +1,16 @@
-#!/bin/sh
+#!/bin/bash
+
 set -e
+
+# Version 2013-04-02
+#   Changed CLFS to BUILDDIR
+#   Addressed case where SBU can't be calculated
+#   Renamed .../sources/clfs to .../sources/logs
+#   Update makeShellScript to use external sed script
+#   Changed the completion flag from a file to an entry in the log
+#   Added path for OOM and sedScript to build.config
+#   Conditional editing for fpu=none case done with build.config file
+
 # Version 2013-03-26
 #   Update redirect for patch download from > to >>
 #   Moved BOOK_ARCH to build.config
@@ -18,11 +29,15 @@ set -e
 
 aFormat="%-5s %-12s %-37s %-6s %-38s %-10s %-8s \n"
 
+source $PWD/build.config
+
+
+
 doPrep () {
 
-source $PWD/aCLFS.config
 
-source $PWD/build.config
+
+
 
 [ -d gitBOOK/$BOOK ] || git clone $REPO gitBOOK/$BOOK
 
@@ -33,7 +48,7 @@ cd - > /dev/null
 [ -d gitBOOK/$BOOK/render/html/${PLATFORM} ] || renderBook
 
 
-[ -d /home/clfs ] && ( [ -f ${CLFS}/sources/clfs/final-preps/settingenvironment.html ]  || rm -f /home/clfs/.bashrc )
+[ -d /home/clfs ] && ( [ -f ${BUILDDIR}/sources/logs/final-preps/settingenvironment.log ]  || rm -f /home/clfs/.bashrc )
 
 }
 
@@ -52,8 +67,7 @@ cd -  > /dev/null
 
 doDownload () {
 
- 
-
+        
       pkg=${pkgUrl##*/}
 
       echo "Preparing "$base
@@ -70,22 +84,23 @@ doDownload () {
 
       case $tarType in
 
-            bz2) tar -xjf $SRC_ARCHIVE/$pkg -C ${CLFS}/sources/  ;;
+            bz2) tar -xjf $SRC_ARCHIVE/$pkg -C ${BUILDDIR}/sources/  ;;
 
-            tar) tar -xvf $SRC_ARCHIVE/$pkg -C ${CLFS}/sources/  ;;
+            tar) tar -xvf $SRC_ARCHIVE/$pkg -C ${BUILDDIR}/sources/  ;;
 
-            gz)   tar -xzf $SRC_ARCHIVE/$pkg -C ${CLFS}/sources/  ;;
+            gz)   tar -xzf $SRC_ARCHIVE/$pkg -C ${BUILDDIR}/sources/  ;;
             
-            xz) tar -Jxf $SRC_ARCHIVE/$pkg -C ${CLFS}/sources/  ;;
+            xz) tar -Jxf $SRC_ARCHIVE/$pkg -C ${BUILDDIR}/sources/  ;;
 
             *)    echo "Unrecognized archive format " && exit 1   ;;
 
       esac
    
-   base=$( echo -n $base | sed s#'${CLFS}'#${CLFS}#g )
-   chown -R clfs ${base}
-   [ -z $patchUrl ] || wget -P ${CLFS}/sources $patchUrl > /dev/null 2>>log
-   [ -z $patchUrl ] || chown -R clfs  ${CLFS}/sources/*.patch 
+   
+  
+   chown -R clfs $( echo -n $base | sed s#'${BUILDDIR}'#${BUILDDIR}#g )
+   [ -z $patchUrl ] || wget -P ${BUILDDIR}/sources $patchUrl > /dev/null 2>>log
+   [ -z $patchUrl ] || chown -R clfs  ${BUILDDIR}/sources/*.patch 
 
 }
 
@@ -98,16 +113,10 @@ echo '[ -f ~/.bashrc ] && source ~/.bashrc' >> shellScript
 echo "pushd $PWD" >> shellScript
 echo "cd $base " >> shellScript
 
-cat $scriptDir/$rootPage | hxselect kbd -c -s '\n' >> shellScript  # scrape commands from page
-echo ' [ $? = 0 ] && touch ${CLFS}/sources/clfs/'$rootPage >> shellScript
+cat $scriptDir/$rootPage | hxselect kbd -c -s '\n' | sed -f $SED >> shellScript  # scrape commands from page
+echo 'echo "exitCode="$?' >> shellScript
 echo "popd " >> shellScript
-
 # The following helps to clean up some html oddities
-
-sed -i s#/mnt/clfs#${CLFS}#g shellScript
-sed -i 's/<[^>]\+>/ /g' shellScript
-sed -i s#"&lt;"#"<"#g shellScript
-sed -i s#"&gt;"#">"#g shellScript
 
 chmod 777 shellScript
 
@@ -115,33 +124,30 @@ chmod 777 shellScript
 
 doCleanUp () {
 
-    rm -r ${base}
+    rm -r $( echo -n $base | sed s#'${BUILDDIR}'#${BUILDDIR}#g )
 
-    for aPatch in `ls ${CLFS}/sources/ | grep -e "patch" `
+    for aPatch in `ls ${BUILDDIR}/sources/ | grep -e "patch" `
     do
-        rm ${CLFS}/sources/$aPatch
+        rm ${BUILDDIR}/sources/$aPatch
     done
 
-    for aBuildDir in `ls ${CLFS}/sources/ | grep -e "-build" `
+    for aBuildDir in `ls ${BUILDDIR}/sources/ | grep -e "-build" `
     do
-        rm -r  ${CLFS}/sources/$aBuildDir
+        rm -r  ${BUILDDIR}/sources/$aBuildDir
     done        
     
-
-
 }
 
 makeReport () {
 
-rm shellScript
-
-SBU=$(( $( grep -e "finalTime" ${CLFS}/sources/clfs/cross-tools/binutils.log | cut -d= -f2 ) - \
-        $( grep -e "initTime" ${CLFS}/sources/clfs/cross-tools/binutils.log | cut -d= -f2 ) ))
-
-
-
-echo "The contents of the aCLFS.config file was "
-cat aCLFS.config
+[ -e shellScript ] && rm shellScript
+if [ -f ${BUILDDIR}/sources/logs/cross-tools/binutils.log ]
+then
+SBU=$(( $( grep -e "finalTime" ${BUILDDIR}/sources/logs/cross-tools/binutils.log | cut -d= -f2 ) - \
+        $( grep -e "initTime" ${BUILDDIR}/sources/logs/cross-tools/binutils.log | cut -d= -f2 ) ))
+else
+    SBU=1
+fi    
 
 echo "The contents of the build.config file was:"
 cat build.config
@@ -159,18 +165,18 @@ do
     
     log=$( echo -n $rootPage | sed s#html#log#g )   
     
-    initDU=$( grep -e "initDU" ${CLFS}/sources/clfs/$log | cut -d= -f2 )
+    initDU=$( grep -e "initDU" ${BUILDDIR}/sources/logs/$log | cut -d= -f2 )
     
-    initTime=$( grep -e "initTime" ${CLFS}/sources/clfs/$log | cut -d= -f2 )
+    initTime=$( grep -e "initTime" ${BUILDDIR}/sources/logs/$log | cut -d= -f2 )
     
-    maxDU=$( grep -e "maxDU" ${CLFS}/sources/clfs/$log | cut -d= -f2 )
+    maxDU=$( grep -e "maxDU" ${BUILDDIR}/sources/logs/$log | cut -d= -f2 )
     
       
     buildDU=$(( maxDU - initDU))
     
-    finalDU=$( grep -e "finalDU" ${CLFS}/sources/clfs/$log | cut -d= -f2 )
+    finalDU=$( grep -e "finalDU" ${BUILDDIR}/sources/logs/$log | cut -d= -f2 )
     
-    finalTime=$( grep -e "finalTime" ${CLFS}/sources/clfs/$log | cut -d= -f2 )
+    finalTime=$( grep -e "finalTime" ${BUILDDIR}/sources/logs/$log | cut -d= -f2 )
     
     elapsedTime=$(( $finalTime - $initTime ))
     
@@ -180,7 +186,7 @@ do
       
 done 
 
-mv summary ${CLFS}/sources/clfs
+mv summary ${BUILDDIR}/sources/logs
 
 
 
@@ -194,7 +200,7 @@ doPrep
 # reading the file 
 
 
-for  pageEntry in $( cat localBOOK/$BOOK/${PLATFORM}/OOM )
+for  pageEntry in $( cat $OOM )
 do
     
     
@@ -210,10 +216,10 @@ do
     
     log=$( echo -n $rootPage | sed s#html#log#g )   
     
+    returnCode=$( grep -e "exitCode" ${BUILDDIR}/sources/logs/$log 2>/dev/null | cut -d= -f2)
+    [ "$returnCode" = "0"  ] && continue
     
-    [ -f ${CLFS}/sources/clfs/$rootPage ] && continue
-    
-    initDU=$( du -ks ${CLFS} 2>/dev/null | cut -f1 ) 
+    initDU=$( du -ks ${BUILDDIR} 2>/dev/null | cut -f1 ) 
     
     [ "$initDU" = "" ] && initDU=0
     
@@ -230,28 +236,29 @@ do
    [  -e localBOOK/$BOOK/${PLATFORM}/$rootPage ] && myBOOK=local                  
    makeScript
    
-   
-   
-   
+  
    printf "$aFormat" $user "is executing" $rootPage "from" $base "using" $myBOOK 
    su -c $PWD/shellScript -s /bin/bash ${user} >> log 2>&1
         
    
     
-    maxDU=$( du -ks ${CLFS} | cut -f1 )  
+    maxDU=$( du -ks ${BUILDDIR} | cut -f1 )  
     echo "maxDU="$maxDU >> log
     echo "finalTime="`date +%s` >> log
     
     [ -z $pkgUrl ] || doCleanUp
     
     
-    finalDU=$( du -ks ${CLFS} | cut -f1 )  
+    finalDU=$( du -ks ${BUILDDIR} | cut -f1 )  
     echo "finalDU="$finalDU >> log
-    mv log  ${CLFS}/sources/clfs/$log
-    [ -f ${CLFS}/sources/clfs/$rootPage ] || break
+    mv log  ${BUILDDIR}/sources/logs/$log
+    
+   
+    returnCode=$( grep -e "exitCode" ${BUILDDIR}/sources/logs/$log | cut -d= -f2)
+    [ $returnCode -eq 0 ] || break
       
 done 
+returnCode=$( grep -e "exitCode" ${BUILDDIR}/sources/logs/$log 2>>/dev/null  | cut -d= -f2)
+( [ $returnCode -eq 0 ] && echo "Congratulations system build complete " ) || echo "Abnormal Termination"
 
-( [ -e ${CLFS}/sources/clfs/$rootPage ] && echo "Congratulations system build complete " ) || echo "Abnormal Termination"
-
-makeReport > summary
+[ $returnCode -eq 0 ] && makeReport > summary
