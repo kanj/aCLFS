@@ -1,7 +1,9 @@
 aCLFS  (Automated Cross Linux from Scratch)
 
-This is an alternate to JHALFS for automation of the CLFS books. Currently JHALFS offers limited support 
-outside of the main LFS book. 
+This is an alternate to JHALFS for automation of the CLFS books. Currently JHALFS offers 
+limited support outside of the main LFS book. 
+
+
 
 This is the structure for aCLFS
 
